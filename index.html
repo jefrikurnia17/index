@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistem Absensi Otomatis JUKABANGUN</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --surface3: #2d333b;
+    --border: #30363d;
+    --border2: #3d444d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --text3: #6e7681;
+    --accent: #f78166;
+    --accent2: #e06c35;
+    --green: #3fb950;
+    --green-bg: #1a3224;
+    --green-text: #56d364;
+    --red: #f85149;
+    --red-bg: #3d1c1c;
+    --red-text: #ff7b72;
+    --gray: #484f58;
+    --gray-bg: #21262d;
+    --gray-text: #8b949e;
+    --blue: #388bfd;
+    --blue-bg: #1c2a3d;
+    --blue-text: #79c0ff;
+    --yellow: #d29922;
+    --yellow-bg: #2d2410;
+    --yellow-text: #e3b341;
+    --sidebar-w: 220px;
+    --sidebar-collapsed-w: 56px;
+    --font: 'Plus Jakarta Sans', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --sidebar-transition: 0.22s cubic-bezier(0.4,0,0.2,1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; display: flex; height: 100vh; overflow: hidden; }
+  @media (max-width: 768px) {
+    body { height: auto; min-height: 100vh; overflow: visible; flex-direction: column; }
+  }
+
+  /* ===== OVERLAY (mobile) ===== */
+  .sidebar-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 90; backdrop-filter: blur(2px);
+  }
+  .sidebar-overlay.open { display: block; }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: width var(--sidebar-transition);
+    position: relative;
+    z-index: 100;
+  }
+  .sidebar.collapsed { width: var(--sidebar-collapsed-w); }
+
+  /* Mobile: sidebar is drawer (off-canvas) */
+  @media (max-width: 768px) {
+    .sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh;
+      transform: translateX(-100%);
+      transition: transform var(--sidebar-transition), width var(--sidebar-transition);
+      width: var(--sidebar-w) !important;
+      z-index: 100;
+    }
+    .sidebar.mobile-open { transform: translateX(0); }
+    .sidebar.collapsed { width: var(--sidebar-w) !important; }
+  }
+
+  /* Toggle button */
+  .sidebar-toggle {
+    position: absolute; top: 14px; right: -14px;
+    width: 28px; height: 28px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 101; transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .sidebar-toggle:hover { background: var(--surface3); }
+  .sidebar-toggle svg { width: 14px; height: 14px; stroke: var(--text2); transition: transform var(--sidebar-transition); }
+  .sidebar.collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+
+  @media (max-width: 768px) {
+    .sidebar-toggle { display: none; }
+  }
+
+  /* Logo area */
+  .sidebar-logo {
+    padding: 20px 16px 16px; border-bottom: 1px solid var(--border);
+    overflow: hidden; white-space: nowrap; min-height: 80px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .logo-badge {
+    display: inline-block; background: var(--accent2); color: #fff;
+    font-size: 9px; font-weight: 700; letter-spacing: 1.5px; padding: 3px 8px;
+    border-radius: 4px; text-transform: uppercase; margin-bottom: 8px;
+    transition: opacity var(--sidebar-transition);
+  }
+  .sidebar-logo h1 {
+    font-size: 13px; font-weight: 800; color: var(--text); line-height: 1.3;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    transition: opacity var(--sidebar-transition);
+  }
+  .sidebar-logo h1 span { color: var(--accent); }
+  .sidebar-logo .logo-icon {
+    width: 28px; height: 28px; background: var(--accent2); border-radius: 6px;
+    display: none; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 900; color: #fff; flex-shrink: 0;
+  }
+  .sidebar.collapsed .sidebar-logo { padding: 14px 0; align-items: center; }
+  .sidebar.collapsed .logo-badge { display: none; }
+  .sidebar.collapsed .sidebar-logo h1 { display: none; }
+  .sidebar.collapsed .logo-icon { display: flex; }
+
+  /* Nav */
+  .sidebar-nav { padding: 12px 8px; flex: 1; overflow-y: auto; overflow-x: hidden; }
+  .nav-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--text3);
+    text-transform: uppercase; padding: 8px 8px 4px;
+    transition: opacity var(--sidebar-transition); white-space: nowrap; overflow: hidden;
+  }
+  .sidebar.collapsed .nav-label { opacity: 0; height: 0; padding: 0; margin: 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border-radius: var(--radius); cursor: pointer; color: var(--text2);
+    font-size: 13px; font-weight: 500; transition: all 0.15s; margin-bottom: 2px;
+    white-space: nowrap; overflow: hidden; position: relative;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(247,129,102,0.15); color: var(--accent); }
+  .nav-item .icon { width: 18px; height: 18px; flex-shrink: 0; }
+  .nav-item .nav-text { transition: opacity var(--sidebar-transition); }
+  .sidebar.collapsed .nav-item { justify-content: center; padding: 9px; }
+  .sidebar.collapsed .nav-item .nav-text { display: none; }
+  .sidebar.collapsed .nav-item:hover::after {
+    content: attr(data-label);
+    position: absolute; left: calc(var(--sidebar-collapsed-w) + 6px); top: 50%; transform: translateY(-50%);
+    background: var(--surface3); color: var(--text); font-size: 12px; font-weight: 600;
+    padding: 5px 10px; border-radius: var(--radius); border: 1px solid var(--border);
+    white-space: nowrap; pointer-events: none; z-index: 200;
+  }
+
+  /* Drive card */
+  .sidebar-drive { padding: 12px 8px; border-top: 1px solid var(--border); overflow: hidden; }
+  .drive-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px;
+    transition: padding var(--sidebar-transition);
+  }
+  .drive-card p { font-size: 11px; color: var(--text2); margin-bottom: 8px; line-height: 1.5; white-space: normal; }
+  .drive-status { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; overflow: hidden; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+  .dot.connected { background: var(--green); }
+  .drive-status span { font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-sm {
+    display: block; width: 100%; padding: 7px; background: var(--surface3);
+    border: 1px solid var(--border2); border-radius: var(--radius); cursor: pointer;
+    color: var(--text); font-size: 12px; font-weight: 600; text-align: center;
+    transition: all 0.15s; font-family: var(--font); white-space: nowrap;
+  }
+  .btn-sm:hover { background: var(--border); }
+  .sidebar.collapsed .sidebar-drive { padding: 8px 4px; }
+  .sidebar.collapsed .drive-card { padding: 8px 4px; display: flex; justify-content: center; }
+  .sidebar.collapsed .drive-card p,
+  .sidebar.collapsed .drive-card .btn-sm,
+  .sidebar.collapsed .drive-status span { display: none; }
+  .sidebar.collapsed .drive-status { margin: 0; }
+
+  /* ===== TOPBAR ===== */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  @media (max-width: 768px) {
+    .main { overflow: visible; flex: unset; width: 100%; }
+  }
+  .topbar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-shrink: 0; position: sticky; top: 0; z-index: 50;
+  }
+  @media (max-width: 768px) { .topbar { padding: 10px 14px; position: sticky; top: 0; z-index: 50; } }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar h2 { font-size: 15px; font-weight: 700; color: var(--text); }
+  .topbar-meta { display: flex; align-items: center; gap: 12px; }
+  .clock {
+    font-family: var(--mono); font-size: 13px; color: var(--accent);
+    background: rgba(247,129,102,0.1); padding: 4px 10px;
+    border-radius: var(--radius); border: 1px solid rgba(247,129,102,0.2);
+    white-space: nowrap;
+  }
+  .date-badge { font-size: 12px; color: var(--text2); white-space: nowrap; }
+
+  /* Mobile hamburger */
+  .mobile-menu-btn {
+    display: none; align-items: center; justify-content: center;
+    width: 34px; height: 34px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; flex-shrink: 0;
+  }
+  .mobile-menu-btn svg { width: 18px; height: 18px; stroke: var(--text2); }
+  @media (max-width: 768px) {
+    .mobile-menu-btn { display: flex; }
+    .date-badge { display: none; }
+  }
+
+  .content { flex: 1; overflow-y: auto; padding: 20px; }
+  @media (max-width: 768px) { .content { overflow-y: visible; overflow-x: hidden; flex: unset; } }
+  @media (max-width: 480px) { .content { padding: 12px; } }
+
+  /* ===== TABS ===== */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  @media (max-width: 768px) {
+    .tab-panel.active { min-height: 0; }
+  }
+
+  /* ===== ABSENSI HARIAN ===== */
+  .absensi-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+  @media (max-width: 900px) { .absensi-layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 20px;
+  }
+  @media (max-width: 480px) { .card { padding: 14px; } }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .card-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .card-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text3);
+    text-transform: uppercase; display: block; margin-bottom: 6px;
+  }
+  .form-control {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: var(--font);
+    font-size: 13px; padding: 9px 12px; outline: none; transition: border 0.15s; appearance: none;
+  }
+  .form-control:focus { border-color: var(--accent); }
+  select.form-control { cursor: pointer; }
+
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 380px) { .upload-grid { grid-template-columns: 1fr; } }
+  .upload-zone {
+    border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 20px;
+    text-align: center; cursor: pointer; transition: all 0.15s; position: relative;
+    overflow: hidden; background: var(--surface2);
+  }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(247,129,102,0.05); }
+  .upload-zone.has-file { border-style: solid; border-color: var(--green); background: var(--green-bg); }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-icon { font-size: 22px; margin-bottom: 6px; }
+  .upload-label { font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .upload-hint { font-size: 10px; color: var(--text3); margin-top: 2px; }
+  .upload-preview { width: 100%; height: 80px; object-fit: cover; border-radius: 4px; margin-bottom: 6px; display: none; }
+
+  .holiday-row {
+    display: flex; align-items: center; gap: 10px; padding: 12px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px;
+  }
+  .holiday-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+  .holiday-row label { font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text); }
+
+  .status-preview {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px;
+  }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.hadir { background: var(--green); }
+  .status-dot.absen { background: var(--red); }
+  .status-dot.partial { background: var(--yellow); }
+  .status-dot.libur { background: var(--gray); }
+  .status-label { font-size: 13px; font-weight: 700; }
+  .status-label.hadir { color: var(--green-text); }
+  .status-label.absen { color: var(--red-text); }
+  .status-label.partial { color: var(--yellow-text); }
+  .status-label.libur { color: var(--gray-text); }
+  .status-desc { font-size: 11px; color: var(--text3); margin-left: auto; }
+  @media (max-width: 480px) { .status-desc { display: none; } }
+
+  .deadline-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 16px;
+  }
+  .deadline-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .deadline-count { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--green-text); }
+  .deadline-count.warning { color: var(--red-text); }
+
+  .btn-submit {
+    display: block; width: 100%; padding: 12px; background: var(--accent2);
+    border: none; border-radius: var(--radius); cursor: pointer; color: #fff;
+    font-size: 14px; font-weight: 800; font-family: var(--font);
+    transition: all 0.15s; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .btn-submit:hover { background: var(--accent); transform: translateY(-1px); }
+  .btn-submit:active { transform: translateY(0); }
+  .btn-submit:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; transform: none; }
+
+  /* LOG SIDEBAR */
+  .log-panel { display: flex; flex-direction: column; gap: 12px; }
+  .log-header { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--text3); text-transform: uppercase; }
+  .log-item {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 10px 12px; animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+  .log-item-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .log-name { font-size: 12px; font-weight: 700; color: var(--text); }
+  .log-time { font-size: 10px; font-family: var(--mono); color: var(--text3); }
+  .log-status { font-size: 11px; font-weight: 700; }
+  .log-status.hadir { color: var(--green-text); }
+  .log-status.absen { color: var(--red-text); }
+  .log-status.libur { color: var(--gray-text); }
+  .log-empty { text-align: center; color: var(--text3); font-size: 12px; padding: 30px 0; }
+
+  /* ===== LAPORAN ===== */
+  .report-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .report-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .report-controls select { width: auto; }
+  @media (max-width: 480px) {
+    .report-header-row { flex-direction: column; align-items: stretch; }
+    .report-controls { flex-direction: column; align-items: stretch; }
+    .report-controls select { width: 100%; }
+    .btn-export { width: 100%; justify-content: center; }
+  }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 480px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px; text-align: center;
+  }
+  .stat-val { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .stat-val.green { color: var(--green-text); }
+  .stat-val.red { color: var(--red-text); }
+  .stat-val.gray { color: var(--gray-text); }
+  .stat-val.blue { color: var(--blue-text); }
+  .stat-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .employee-cards { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+  .emp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
+  .emp-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .emp-avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: var(--accent2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0;
+  }
+  .emp-name { font-size: 14px; font-weight: 700; color: var(--text); word-break: break-word; }
+  .emp-unit { font-size: 11px; color: var(--text3); }
+  .emp-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .emp-stat { font-size: 12px; color: var(--text2); }
+  .emp-stat strong { color: var(--text); }
+  .emp-percent { font-size: 20px; font-weight: 800; margin-left: auto; white-space: nowrap; }
+  .progress-track { background: var(--surface2); border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 14px; }
+  .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), var(--green-text)); transition: width 0.6s ease; }
+  .progress-fill.medium { background: linear-gradient(90deg, var(--yellow), var(--yellow-text)); }
+  .progress-fill.low { background: linear-gradient(90deg, var(--red), var(--red-text)); }
+
+  /* HEATMAP */
+  .heatmap { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .heatmap-cell {
+    width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center;
+    justify-content: center; font-size: 9px; font-weight: 700; font-family: var(--mono);
+    cursor: default; transition: transform 0.1s; flex-shrink: 0;
+  }
+  @media (max-width: 480px) { .heatmap-cell { width: 22px; height: 22px; font-size: 8px; } }
+  .heatmap-cell:hover { transform: scale(1.15); z-index: 1; }
+  .heatmap-cell.hadir { background: var(--green-bg); color: var(--green-text); border: 1px solid rgba(63,185,80,0.2); }
+  .heatmap-cell.absen { background: var(--red-bg); color: var(--red-text); border: 1px solid rgba(248,81,73,0.2); }
+  .heatmap-cell.libur { background: var(--gray-bg); color: var(--gray-text); border: 1px solid var(--border); }
+  .heatmap-cell.kosong { background: var(--surface2); color: var(--text3); border: 1px dashed var(--border); }
+
+  .legend { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text3); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  .legend-dot.hadir { background: var(--green); }
+  .legend-dot.absen { background: var(--red); }
+  .legend-dot.libur { background: var(--gray); }
+
+  /* LOG TABLE */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 500px; }
+  .log-table th {
+    background: var(--surface2); color: var(--text3); font-weight: 700; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px;
+    text-align: left; border-bottom: 1px solid var(--border);
+  }
+  .log-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text2); }
+  .log-table tr:last-child td { border-bottom: none; }
+  .log-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
+  .badge.hadir { background: var(--green-bg); color: var(--green-text); }
+  .badge.absen { background: var(--red-bg); color: var(--red-text); }
+  .badge.libur { background: var(--gray-bg); color: var(--gray-text); }
+  .badge.partial { background: var(--yellow-bg); color: var(--yellow-text); }
+
+  .log-detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  @media (max-width: 480px) {
+    .log-detail-header { flex-direction: column; align-items: stretch; }
+    .log-detail-header .filter-row { flex-direction: column; }
+    .log-detail-header .filter-row select { width: 100%; }
+  }
+
+  .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-row select { width: auto; }
+  @media (max-width: 480px) {
+    .filter-row { flex-direction: column; }
+    .filter-row select { width: 100%; }
+  }
+
+  .btn-export {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px;
+    background: var(--blue-bg); border: 1px solid rgba(56,139,253,0.3); border-radius: var(--radius);
+    cursor: pointer; color: var(--blue-text); font-size: 13px; font-weight: 700; font-family: var(--font);
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-export:hover { background: rgba(56,139,253,0.2); }
+
+  /* ===== PENGATURAN ===== */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 768px) { .settings-grid { grid-template-columns: 1fr; } }
+  .settings-title {
+    font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 16px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .employee-list-manage { display: flex; flex-direction: column; gap: 8px; }
+  .emp-row-manage {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
+  }
+  .emp-row-manage .emp-nm { font-size: 13px; font-weight: 700; color: var(--text); }
+  .emp-row-manage .emp-un { font-size: 11px; color: var(--text3); }
+  .btn-del {
+    background: var(--red-bg); border: 1px solid rgba(248,81,73,0.3); border-radius: 6px;
+    padding: 5px 10px; color: var(--red-text); font-size: 11px; font-weight: 700;
+    cursor: pointer; font-family: var(--font);
+  }
+  .btn-del:hover { background: rgba(248,81,73,0.25); }
+  .add-emp-form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .add-emp-row { display: flex; gap: 8px; }
+  @media (max-width: 480px) { .add-emp-row { flex-direction: column; } }
+  .btn-add {
+    padding: 9px 16px; background: var(--green-bg); border: 1px solid rgba(63,185,80,0.3);
+    border-radius: var(--radius); color: var(--green-text); font-size: 12px; font-weight: 700;
+    cursor: pointer; font-family: var(--font); white-space: nowrap;
+  }
+  .btn-add:hover { background: rgba(63,185,80,0.2); }
+
+  .drive-connect-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+  .drive-connect-card p { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.7; }
+  .drive-folder-struct {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; font-family: var(--mono); font-size: 11px; color: var(--text3); line-height: 1.8;
+    margin-bottom: 16px; overflow-x: auto; word-break: break-word;
+  }
+  .drive-folder-struct .folder { color: var(--blue-text); }
+  .drive-folder-struct .file { color: var(--green-text); }
+  .connected-email {
+    font-size: 12px; color: var(--green-text); padding: 8px 12px; background: var(--green-bg);
+    border: 1px solid rgba(63,185,80,0.2); border-radius: var(--radius); margin-bottom: 12px; display: none;
+  }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex;
+    align-items: center; justify-content: center; z-index: 1000; opacity: 0;
+    pointer-events: none; transition: opacity 0.2s; padding: 16px;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 24px; width: 440px; max-width: 100%; transform: scale(0.95); transition: transform 0.2s;
+  }
+  .modal-overlay.open .modal { transform: scale(1); }
+  .modal h3 { font-size: 15px; font-weight: 800; margin-bottom: 8px; }
+  .modal p { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.6; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .btn-cancel {
+    padding: 9px 18px; background: transparent; border: 1px solid var(--border2);
+    border-radius: var(--radius); color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font);
+  }
+  .btn-confirm {
+    padding: 9px 18px; background: var(--accent2); border: none;
+    border-radius: var(--radius); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font);
+  }
+  .btn-confirm:hover { background: var(--accent); }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px;
+    font-size: 13px; font-weight: 600; z-index: 2000; transform: translateY(20px);
+    opacity: 0; transition: all 0.25s; pointer-events: none; max-width: 300px;
+  }
+  @media (max-width: 480px) {
+    .toast { right: 12px; left: 12px; max-width: unset; bottom: 16px; }
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.success { border-color: rgba(63,185,80,0.4); color: var(--green-text); }
+  .toast.error { border-color: rgba(248,81,73,0.4); color: var(--red-text); }
+  .toast.info { border-color: rgba(56,139,253,0.4); color: var(--blue-text); }
+
+  .section-sep { height: 1px; background: var(--border); margin: 24px 0; }
+  .info-box {
+    background: var(--blue-bg); border: 1px solid rgba(56,139,253,0.2);
+    border-radius: var(--radius); padding: 12px 14px; font-size: 12px;
+    color: var(--blue-text); line-height: 1.6; margin-bottom: 16px;
+  }
+
+  /* Google login button */
+  .btn-google-login {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 11px 16px; background: #4285f4;
+    border: none; border-radius: var(--radius); cursor: pointer;
+    color: #fff; font-size: 13px; font-weight: 700; font-family: var(--font);
+    transition: all 0.15s;
+  }
+  .btn-google-login:hover { background: #3367d6; transform: translateY(-1px); }
+  .btn-google-login:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; transform: none; }
+
+  /* Drive user card */
+  .drive-user-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--green-bg); border: 1px solid rgba(63,185,80,0.25);
+    border-radius: var(--radius); padding: 12px;
+  }
+  .drive-user-avatar {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--accent2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800; color: #fff; flex-shrink: 0; overflow: hidden;
+  }
+  .drive-user-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+  .drive-user-info { flex: 1; min-width: 0; }
+  .drive-user-name { font-size: 13px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drive-user-email { font-size: 11px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drive-connected-badge { font-size: 10px; font-weight: 700; color: var(--green-text); background: rgba(63,185,80,0.15); padding: 3px 8px; border-radius: 12px; white-space: nowrap; flex-shrink: 0; }
+
+  /* Upload queue */
+  .upload-queue-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 6px; font-size: 11px;
+  }
+  .upload-queue-item .uq-icon { width: 16px; height: 16px; flex-shrink: 0; }
+  .upload-queue-item .uq-name { flex: 1; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .upload-queue-item .uq-status { font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .uq-status.uploading { color: var(--blue-text); }
+  .uq-status.done { color: var(--green-text); }
+  .uq-status.error { color: var(--red-text); }
+  .uq-status.waiting { color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- OVERLAY (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <!-- Toggle button (desktop) -->
+  <div class="sidebar-toggle" onclick="toggleSidebar()" title="Sembunyikan/Tampilkan sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M15 18l-6-6 6-6"/>
+    </svg>
+  </div>
+
+  <div class="sidebar-logo">
+    <div class="logo-icon">J</div>
+    <div class="logo-badge">v1.0</div>
+    <h1>SISTEM ABSENSI<br><span>JUKABANGUN</span></h1>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-label">Menu</div>
+    <div class="nav-item active" onclick="switchTab('absensi');closeMobileSidebar()" id="nav-absensi" data-label="Absensi Harian">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+      <span class="nav-text">Absensi Harian</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('laporan');closeMobileSidebar()" id="nav-laporan" data-label="Laporan">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <span class="nav-text">Laporan</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('pengaturan');closeMobileSidebar()" id="nav-pengaturan" data-label="Pengaturan">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="nav-text">Pengaturan</span>
+    </div>
+  </nav>
+
+  <div class="sidebar-drive">
+    <div class="drive-card">
+      <div class="drive-status">
+        <div class="dot" id="drive-dot-sidebar"></div>
+        <span id="drive-status-text">Belum terhubung</span>
+      </div>
+      <p id="drive-card-desc">Hubungkan Google Drive untuk simpan bukti absensi otomatis</p>
+      <button class="btn-sm" onclick="openDriveModal()" id="btn-sidebar-connect">Hubungkan Drive</button>
+      <button class="btn-sm" onclick="disconnectDrive()" id="btn-sidebar-disconnect" style="display:none;background:var(--red-bg);color:var(--red-text);border-color:rgba(248,81,73,0.3)">Putus Koneksi</button>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <!-- Mobile hamburger -->
+      <div class="mobile-menu-btn" onclick="openMobileSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </div>
+      <h2 id="topbar-title">Absensi Harian</h2>
+    </div>
+    <div class="topbar-meta">
+      <div class="date-badge" id="date-display"></div>
+      <div class="clock" id="live-clock">00:00:00</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ===== TAB: ABSENSI HARIAN ===== -->
+    <div class="tab-panel active" id="panel-absensi">
+      <div class="absensi-layout">
+        <!-- FORM -->
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Form Absensi Harian</div>
+                <div class="card-sub">Isi lengkap sebelum batas waktu 23:59:59</div>
+              </div>
+            </div>
+
+            <div class="deadline-bar">
+              <span class="deadline-label">Sisa Waktu</span>
+              <span class="deadline-count" id="countdown">--:--:--</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Pilih Karyawan</label>
+              <select class="form-control" id="sel-karyawan">
+                <option value="">-- Pilih Karyawan --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Tanggal Absensi</label>
+              <input type="date" class="form-control" id="inp-tanggal">
+            </div>
+
+            <div class="holiday-row">
+              <input type="checkbox" id="chk-libur" onchange="toggleLibur()">
+              <label for="chk-libur">Tandai Hari Libur / Off</label>
+            </div>
+
+            <div id="upload-section">
+              <div class="form-group">
+                <label class="form-label">Bukti Foto Absensi</label>
+                <div class="upload-grid">
+                  <div class="upload-zone" id="zone-masuk" onclick="document.getElementById('inp-masuk').click()">
+                    <input type="file" id="inp-masuk" accept="image/*" onchange="previewFile(this,'masuk')" style="display:none">
+                    <img id="prev-masuk" class="upload-preview" src="">
+                    <div id="upload-masuk-content">
+                      <div class="upload-icon">📷</div>
+                      <div class="upload-label">Foto Masuk</div>
+                      <div class="upload-hint">Klik untuk upload</div>
+                    </div>
+                  </div>
+                  <div class="upload-zone" id="zone-pulang" onclick="document.getElementById('inp-pulang').click()">
+                    <input type="file" id="inp-pulang" accept="image/*" onchange="previewFile(this,'pulang')" style="display:none">
+                    <img id="prev-pulang" class="upload-preview" src="">
+                    <div id="upload-pulang-content">
+                      <div class="upload-icon">🏠</div>
+                      <div class="upload-label">Foto Pulang</div>
+                      <div class="upload-hint">Klik untuk upload</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-preview" id="status-preview">
+              <div class="status-dot absen" id="status-dot"></div>
+              <span class="status-label absen" id="status-text">ABSEN</span>
+              <span class="status-desc" id="status-desc">Upload kedua foto untuk hadir</span>
+            </div>
+
+            <button class="btn-submit" id="btn-submit" onclick="submitAbsensi()">
+              SUBMIT ABSENSI
+            </button>
+          </div>
+        </div>
+
+        <!-- LOG HARIAN -->
+        <div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:16px">Log Hari Ini</div>
+            <div class="log-panel" id="log-panel">
+              <div class="log-empty" id="log-empty">Belum ada absensi hari ini</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: LAPORAN ===== -->
+    <div class="tab-panel" id="panel-laporan">
+      <div class="report-header-row">
+        <div>
+          <div style="font-size:18px;font-weight:800;margin-bottom:2px">Rekap Laporan Absensi</div>
+          <div style="font-size:12px;color:var(--text3)" id="report-period"></div>
+        </div>
+        <div class="report-controls">
+          <select class="form-control" id="report-month" onchange="renderLaporan()"></select>
+          <select class="form-control" id="report-year" onchange="renderLaporan()"></select>
+          <button class="btn-export" onclick="exportToDrive()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Export ke Drive
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="section-sep"></div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:16px">Rekap Per Karyawan</div>
+      <div class="employee-cards" id="employee-cards"></div>
+      <div class="section-sep"></div>
+
+      <div class="log-detail-header">
+        <div style="font-size:14px;font-weight:700">Log Detail</div>
+        <div class="filter-row" style="margin:0">
+          <select class="form-control" id="filter-nama" onchange="renderLogTable()">
+            <option value="">Semua Karyawan</option>
+          </select>
+          <select class="form-control" id="filter-status" onchange="renderLogTable()">
+            <option value="">Semua Status</option>
+            <option value="HADIR">Hadir</option>
+            <option value="ABSEN">Absen</option>
+            <option value="LIBUR">Libur</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>No</th><th>Karyawan</th><th>Tanggal</th><th>Status</th><th>Jam Submit</th><th>Keterangan</th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody"></tbody>
+          </table>
+          <div id="log-empty-table" style="text-align:center;color:var(--text3);padding:30px;font-size:13px;">Belum ada data</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: PENGATURAN ===== -->
+    <div class="tab-panel" id="panel-pengaturan">
+      <div style="font-size:18px;font-weight:800;margin-bottom:20px">Pengaturan Sistem</div>
+
+      <div class="settings-grid">
+        <div>
+          <div class="settings-title">Manajemen Karyawan</div>
+          <div class="employee-list-manage" id="emp-list-manage"></div>
+          <div class="add-emp-form">
+            <div class="add-emp-row">
+              <input type="text" class="form-control" id="inp-new-name" placeholder="Nama karyawan">
+              <input type="text" class="form-control" id="inp-new-unit" placeholder="Unit / Posisi">
+            </div>
+            <button class="btn-add" onclick="addEmployee()">+ Tambah Karyawan</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="settings-title">Koneksi Google Drive</div>
+          <div class="drive-connect-card">
+
+            <!-- STEP 1: Belum terhubung -->
+            <div id="drive-disconnected-panel">
+              <p>Hubungkan akun Google Drive untuk menyimpan bukti foto dan laporan secara otomatis. Klik tombol di bawah untuk login dengan Google.</p>
+
+              <div class="info-box" style="margin-bottom:16px;font-size:11px">
+                <strong>Izin yang diminta:</strong> Hanya akses ke file yang dibuat oleh aplikasi ini di Google Drive Anda. Aplikasi tidak dapat membaca file lain.
+              </div>
+
+              <!-- Setup Client ID -->
+              <div class="form-group" id="clientid-setup">
+                <label class="form-label">Google Client ID</label>
+                <input type="text" class="form-control" id="inp-client-id" placeholder="xxxx.apps.googleusercontent.com" style="font-size:11px;font-family:var(--mono)">
+                <div style="font-size:10px;color:var(--text3);margin-top:4px">
+                  Dapatkan Client ID gratis di <strong>console.cloud.google.com</strong> → APIs & Services → Credentials → Create OAuth 2.0 Client ID
+                </div>
+              </div>
+
+              <button class="btn-google-login" id="btn-google-login" onclick="initGoogleLogin()">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Login dengan Google
+              </button>
+            </div>
+
+            <!-- STEP 2: Sudah terhubung -->
+            <div id="drive-connected-panel" style="display:none">
+              <div class="drive-user-card" id="drive-user-card">
+                <div class="drive-user-avatar" id="drive-user-avatar">G</div>
+                <div class="drive-user-info">
+                  <div class="drive-user-name" id="drive-user-name">—</div>
+                  <div class="drive-user-email" id="drive-user-email">—</div>
+                </div>
+                <div class="drive-connected-badge">✓ Terhubung</div>
+              </div>
+
+              <div class="drive-folder-struct" style="margin-top:16px;margin-bottom:16px">
+                <div class="folder">📁 Absensi Karyawan/</div>
+                <div class="folder" style="padding-left:20px">📁 [Nama Bulan Tahun]/</div>
+                <div class="folder" style="padding-left:40px">📁 [Nama Karyawan]/</div>
+                <div class="file"   style="padding-left:60px">🖼 {tanggal}_masuk.jpg</div>
+                <div class="file"   style="padding-left:60px">🖼 {tanggal}_pulang.jpg</div>
+                <div class="folder" style="padding-left:20px">📁 [Nama Bulan Tahun] — Rekap/</div>
+                <div class="file"   style="padding-left:40px">📊 REKAP_ABSENSI_[NAMA BULAN TAHUN].xlsx</div>
+              </div>
+
+              <!-- Upload queue status -->
+              <div id="upload-queue-panel" style="display:none">
+                <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Status Upload</div>
+                <div id="upload-queue-list"></div>
+              </div>
+
+              <button class="btn-del" onclick="disconnectDrive()" style="width:100%;margin-top:12px;padding:9px">Putus Koneksi Google Drive</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="section-sep"></div>
+      <div class="settings-title">Informasi Sistem</div>
+      <div class="info-box">
+        <strong>Aturan Absensi:</strong> Karyawan wajib upload foto masuk DAN foto pulang sebelum pukul 23:59:59 untuk dihitung HADIR. Jika hanya salah satu foto yang diupload (partial) atau tidak ada sama sekali dan deadline terlewat, maka otomatis dihitung ABSEN. Jika hari libur, centang checkbox "Tandai Hari Libur" tanpa perlu upload foto.
+        <br><br><strong>Rumus Persentase Kehadiran:</strong> (Jumlah Hadir ÷ (Total Hari Bulan − Jumlah Libur)) × 100%
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- MODAL DRIVE OAUTH -->
+<div class="modal-overlay" id="modal-drive">
+  <div class="modal">
+    <h3>Hubungkan Google Drive</h3>
+    <p>Masukkan Google Client ID Anda, lalu login dengan akun Google. Foto absensi dan rekap bulanan akan tersimpan otomatis ke Drive.</p>
+    <div class="form-group">
+      <label class="form-label">Google Client ID</label>
+      <input type="text" class="form-control" id="modal-client-id" placeholder="xxxx.apps.googleusercontent.com" style="font-size:11px;font-family:var(--mono)">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Buat di console.cloud.google.com → APIs & Services → Credentials</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('modal-drive')">Batal</button>
+      <button class="btn-confirm" onclick="initGoogleLoginFromModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" style="margin-right:6px;vertical-align:middle"><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/><path fill="#fff" d="M1 12c0 1.78.43 3.45 1.18 4.93l3.66-2.84c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09L2.18 7.07C1.43 8.55 1 10.22 1 12z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31l3.57 2.77C21.36 17.64 22.56 14.82 22.56 12.25z"/></svg>
+        Login dengan Google
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== STATE =====
+let state = {
+  employees: [
+    { id: 1, name: 'Wahyudin', unit: 'Prorent' },
+    { id: 2, name: 'Doni', unit: 'Broadway' },
+    { id: 3, name: 'Ani', unit: 'Galeri Kostum' },
+    { id: 4, name: 'Mae', unit: 'Marketing' }
+  ],
+  logs: [],
+  driveEmail: null,
+  nextId: 5,
+  sidebarCollapsed: false
+};
+
+try {
+  const saved = localStorage.getItem('jukabangun_state');
+  if (saved) state = JSON.parse(saved);
+} catch(e) {}
+
+function saveState() {
+  try { localStorage.setItem('jukabangun_state', JSON.stringify(state)); } catch(e) {}
+}
+
+let photoStore = {};
+try {
+  const ps = localStorage.getItem('jukabangun_photos');
+  if (ps) photoStore = JSON.parse(ps);
+} catch(e) {}
+function savePhotos() {
+  try { localStorage.setItem('jukabangun_photos', JSON.stringify(photoStore)); } catch(e) {}
+}
+
+// ===== SIDEBAR TOGGLE =====
+const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  sb.classList.toggle('collapsed', state.sidebarCollapsed);
+  saveState();
+}
+
+function openMobileSidebar() {
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ===== INIT =====
+function init() {
+  if (state.sidebarCollapsed && window.innerWidth > 768) {
+    document.getElementById('sidebar').classList.add('collapsed');
+  }
+  const now = new Date();
+  document.getElementById('inp-tanggal').value = now.toISOString().split('T')[0];
+  initClock();
+  populateEmployeeSelect();
+  populateReportFilters();
+  renderEmployeeManage();
+  renderLaporan();
+  updateDriveUI();
+  renderTodayLog();
+  // Jika token masih valid, proses antrian yang tertunda
+  if (driveAccessToken && uploadQueue.length > 0) processUploadQueue();
+}
+
+function initClock() {
+  setInterval(() => {
+    const now = new Date();
+    document.getElementById('live-clock').textContent = now.toTimeString().slice(0,8);
+    document.getElementById('date-display').textContent =
+      now.toLocaleDateString('id-ID', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    updateCountdown(now);
+  }, 1000);
+}
+
+function updateCountdown(now) {
+  const end = new Date(now); end.setHours(23,59,59,0);
+  const diff = end - now;
+  if (diff <= 0) {
+    document.getElementById('countdown').textContent = 'LEWAT DEADLINE';
+    document.getElementById('countdown').classList.add('warning');
+    return;
+  }
+  const h = Math.floor(diff/3600000);
+  const m = Math.floor((diff%3600000)/60000);
+  const s = Math.floor((diff%60000)/1000);
+  const el = document.getElementById('countdown');
+  el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  el.classList.toggle('warning', h < 1);
+}
+
+function populateEmployeeSelect() {
+  const sel = document.getElementById('sel-karyawan');
+  sel.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
+  state.employees.forEach(e => {
+    sel.innerHTML += `<option value="${e.id}">${e.name} (${e.unit})</option>`;
+  });
+}
+
+function populateReportFilters() {
+  const now = new Date();
+  const mSel = document.getElementById('report-month');
+  const ySel = document.getElementById('report-year');
+  const fSel = document.getElementById('filter-nama');
+
+  mSel.innerHTML = MONTHS.map((m,i) => `<option value="${i}" ${i===now.getMonth()?'selected':''}>${m}</option>`).join('');
+  const years = [now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1];
+  ySel.innerHTML = years.map(y => `<option value="${y}" ${y===now.getFullYear()?'selected':''}>${y}</option>`).join('');
+
+  fSel.innerHTML = '<option value="">Semua Karyawan</option>';
+  state.employees.forEach(e => { fSel.innerHTML += `<option value="${e.name}">${e.name}</option>`; });
+}
+
+// ===== NAVIGATION =====
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+  document.getElementById('nav-'+tab).classList.add('active');
+  const titles = { absensi:'Absensi Harian', laporan:'Laporan', pengaturan:'Pengaturan' };
+  document.getElementById('topbar-title').textContent = titles[tab];
+  if (tab === 'laporan') renderLaporan();
+  if (tab === 'pengaturan') renderEmployeeManage();
+}
+
+// ===== ABSENSI FORM =====
+let photoMasuk = null, photoPulang = null;
+
+function previewFile(input, type) {
+  if (!input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = e.target.result;
+    if (type === 'masuk') {
+      photoMasuk = data;
+      const img = document.getElementById('prev-masuk');
+      img.src = data; img.style.display = 'block';
+      document.getElementById('upload-masuk-content').style.display = 'none';
+      document.getElementById('zone-masuk').classList.add('has-file');
+    } else {
+      photoPulang = data;
+      const img = document.getElementById('prev-pulang');
+      img.src = data; img.style.display = 'block';
+      document.getElementById('upload-pulang-content').style.display = 'none';
+      document.getElementById('zone-pulang').classList.add('has-file');
+    }
+    updateStatusPreview();
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function toggleLibur() {
+  const isLibur = document.getElementById('chk-libur').checked;
+  document.getElementById('upload-section').style.opacity = isLibur ? '0.4' : '1';
+  document.getElementById('upload-section').style.pointerEvents = isLibur ? 'none' : 'all';
+  updateStatusPreview();
+}
+
+function updateStatusPreview() {
+  const isLibur = document.getElementById('chk-libur').checked;
+  const dot = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  const desc = document.getElementById('status-desc');
+  dot.className = 'status-dot'; text.className = 'status-label';
+  if (isLibur) {
+    dot.classList.add('libur'); text.classList.add('libur');
+    text.textContent = 'LIBUR'; desc.textContent = 'Hari ini ditandai libur';
+  } else if (photoMasuk && photoPulang) {
+    dot.classList.add('hadir'); text.classList.add('hadir');
+    text.textContent = 'HADIR'; desc.textContent = 'Kedua foto lengkap';
+  } else if (photoMasuk || photoPulang) {
+    dot.classList.add('partial'); text.classList.add('partial');
+    text.textContent = 'PARTIAL'; desc.textContent = 'Upload foto yang kurang';
+  } else {
+    dot.classList.add('absen'); text.classList.add('absen');
+    text.textContent = 'ABSEN'; desc.textContent = 'Upload kedua foto untuk hadir';
+  }
+}
+
+function submitAbsensi() {
+  const empId = parseInt(document.getElementById('sel-karyawan').value);
+  const tanggal = document.getElementById('inp-tanggal').value;
+  const isLibur = document.getElementById('chk-libur').checked;
+
+  if (!empId) { showToast('Pilih karyawan terlebih dahulu', 'error'); return; }
+  if (!tanggal) { showToast('Pilih tanggal terlebih dahulu', 'error'); return; }
+
+  const emp = state.employees.find(e => e.id === empId);
+  const dup = state.logs.find(l => l.empId === empId && l.tanggal === tanggal);
+  if (dup) { showToast(`${emp.name} sudah submit pada ${tanggal}`, 'error'); return; }
+
+  const now = new Date();
+  const isDeadlinePassed = tanggal === now.toISOString().split('T')[0] &&
+    (now.getHours() > 23 || (now.getHours() === 23 && now.getMinutes() === 59 && now.getSeconds() >= 59));
+
+  let status, keterangan;
+  if (isLibur) {
+    status = 'LIBUR'; keterangan = 'Hari libur';
+  } else if (isDeadlinePassed) {
+    status = 'ABSEN'; keterangan = 'Submit melewati deadline 23:59:59';
+  } else if (photoMasuk && photoPulang) {
+    status = 'HADIR'; keterangan = 'Hadir lengkap';
+  } else {
+    status = 'ABSEN';
+    keterangan = photoMasuk ? 'Foto pulang tidak diupload' : photoPulang ? 'Foto masuk tidak diupload' : 'Tidak ada foto';
+  }
+
+  const log = {
+    id: Date.now(), empId, empName: emp.name, empUnit: emp.unit,
+    tanggal, status, keterangan,
+    jamSubmit: now.toTimeString().slice(0,8),
+    hasFotoMasuk: !!photoMasuk, hasFotoPulang: !!photoPulang
+  };
+  state.logs.push(log);
+
+  if (photoMasuk) photoStore[`${empId}_${tanggal}_masuk`] = photoMasuk;
+  if (photoPulang) photoStore[`${empId}_${tanggal}_pulang`] = photoPulang;
+  savePhotos();
+  saveState();
+
+  if (status === 'HADIR') {
+    addToUploadQueue(log.id, emp.name, tanggal, photoMasuk, photoPulang);
+    if (driveAccessToken) {
+      showToast(`Absensi ${emp.name}: HADIR — mengupload foto ke Drive...`, 'success');
+    } else {
+      showToast(`Absensi ${emp.name}: HADIR — foto antri, hubungkan Drive untuk upload`, 'success');
+    }
+  } else {
+    showToast(`Absensi ${emp.name} tercatat: ${status}`, 'info');
+  }
+
+  renderTodayLog();
+  resetForm();
+}
+
+function resetForm() {
+  document.getElementById('sel-karyawan').value = '';
+  document.getElementById('inp-tanggal').value = new Date().toISOString().split('T')[0];
+  document.getElementById('chk-libur').checked = false;
+  document.getElementById('upload-section').style.opacity = '1';
+  document.getElementById('upload-section').style.pointerEvents = 'all';
+  ['masuk','pulang'].forEach(t => {
+    const img = document.getElementById('prev-'+t);
+    img.src = ''; img.style.display = 'none';
+    document.getElementById('upload-'+t+'-content').style.display = 'block';
+    document.getElementById('zone-'+t).classList.remove('has-file');
+  });
+  document.getElementById('inp-masuk').value = '';
+  document.getElementById('inp-pulang').value = '';
+  photoMasuk = null; photoPulang = null;
+  updateStatusPreview();
+}
+
+function renderTodayLog() {
+  const today = new Date().toISOString().split('T')[0];
+  const todayLogs = state.logs.filter(l => l.tanggal === today).slice(-10).reverse();
+  const panel = document.getElementById('log-panel');
+  const empty = document.getElementById('log-empty');
+  if (!todayLogs.length) { empty.style.display = 'block'; panel.innerHTML = ''; panel.appendChild(empty); return; }
+  empty.style.display = 'none';
+  panel.innerHTML = `<div class="log-header">Log Hari Ini (${todayLogs.length})</div>`;
+  todayLogs.forEach(l => {
+    const cls = l.status === 'HADIR' ? 'hadir' : l.status === 'LIBUR' ? 'libur' : 'absen';
+    panel.innerHTML += `
+      <div class="log-item">
+        <div class="log-item-header">
+          <span class="log-name">${l.empName}</span>
+          <span class="log-time">${l.jamSubmit}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="log-status ${cls}">${l.status}</span>
+          <span style="font-size:10px;color:var(--text3)">${l.keterangan}</span>
+        </div>
+      </div>`;
+  });
+}
+
+// ===== LAPORAN =====
+function getDaysInMonth(month, year) { return new Date(year, month+1, 0).getDate(); }
+
+function renderLaporan() {
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  document.getElementById('report-period').textContent = `${MONTHS[month]} ${year}`;
+  const daysInMonth = getDaysInMonth(month, year);
+
+  const logsThisMonth = state.logs.filter(l => {
+    const d = new Date(l.tanggal);
+    return d.getMonth() === month && d.getFullYear() === year;
+  });
+
+  const totalHadir = logsThisMonth.filter(l => l.status === 'HADIR').length;
+  const totalAbsen = logsThisMonth.filter(l => l.status === 'ABSEN').length;
+  const totalLibur = logsThisMonth.filter(l => l.status === 'LIBUR').length;
+  const avgPct = state.employees.length ? state.employees.map(emp => {
+    const logs = logsThisMonth.filter(l => l.empId === emp.id);
+    const hadir = logs.filter(l => l.status === 'HADIR').length;
+    const libur = logs.filter(l => l.status === 'LIBUR').length;
+    const denom = daysInMonth - libur;
+    return denom > 0 ? (hadir/denom)*100 : 0;
+  }).reduce((a,b) => a+b, 0) / state.employees.length : 0;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-val green">${totalHadir}</div><div class="stat-label">Total Hadir</div></div>
+    <div class="stat-card"><div class="stat-val red">${totalAbsen}</div><div class="stat-label">Total Absen</div></div>
+    <div class="stat-card"><div class="stat-val gray">${totalLibur}</div><div class="stat-label">Total Libur</div></div>
+    <div class="stat-card"><div class="stat-val blue">${Math.round(avgPct)}%</div><div class="stat-label">Rata-rata Kehadiran</div></div>
+  `;
+
+  const empCards = document.getElementById('employee-cards');
+  empCards.innerHTML = '';
+  state.employees.forEach(emp => {
+    const logs = logsThisMonth.filter(l => l.empId === emp.id);
+    const hadir = logs.filter(l => l.status === 'HADIR').length;
+    const absen = logs.filter(l => l.status === 'ABSEN').length;
+    const libur = logs.filter(l => l.status === 'LIBUR').length;
+    const denom = daysInMonth - libur;
+    const pct = denom > 0 ? Math.round((hadir/denom)*100) : 0;
+    const fillClass = pct >= 80 ? '' : pct >= 60 ? 'medium' : 'low';
+    const initials = emp.name.slice(0,2).toUpperCase();
+
+    let heatmap = '';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dd = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const log = logs.find(l => l.tanggal === dd);
+      let cls = 'kosong';
+      if (log) cls = log.status === 'HADIR' ? 'hadir' : log.status === 'LIBUR' ? 'libur' : 'absen';
+      heatmap += `<div class="heatmap-cell ${cls}" title="${dd}: ${log ? log.status : '-'}">${d}</div>`;
+    }
+
+    empCards.innerHTML += `
+      <div class="emp-card">
+        <div class="emp-card-header">
+          <div class="emp-avatar">${initials}</div>
+          <div>
+            <div class="emp-name">${emp.name}</div>
+            <div class="emp-unit">${emp.unit}</div>
+          </div>
+          <div class="emp-percent" style="color:${pct>=80?'var(--green-text)':pct>=60?'var(--yellow-text)':'var(--red-text)'}">${pct}%</div>
+        </div>
+        <div class="emp-stats">
+          <div class="emp-stat"><strong style="color:var(--green-text)">${hadir}</strong> Hadir</div>
+          <div class="emp-stat"><strong style="color:var(--red-text)">${absen}</strong> Absen</div>
+          <div class="emp-stat"><strong style="color:var(--gray-text)">${libur}</strong> Libur</div>
+          <div class="emp-stat"><strong>${daysInMonth}</strong> Hari Bulan</div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill ${fillClass}" style="width:${pct}%"></div>
+        </div>
+        <div class="heatmap">${heatmap}</div>
+        <div class="legend" style="margin-top:8px">
+          <div class="legend-item"><div class="legend-dot hadir"></div> Hadir</div>
+          <div class="legend-item"><div class="legend-dot absen"></div> Absen</div>
+          <div class="legend-item"><div class="legend-dot libur"></div> Libur</div>
+        </div>
+      </div>`;
+  });
+
+  renderLogTable();
+}
+
+function renderLogTable() {
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  const filterNama = document.getElementById('filter-nama').value;
+  const filterStatus = document.getElementById('filter-status').value;
+
+  let logs = state.logs.filter(l => {
+    const d = new Date(l.tanggal);
+    return d.getMonth() === month && d.getFullYear() === year;
+  });
+  if (filterNama) logs = logs.filter(l => l.empName === filterNama);
+  if (filterStatus) logs = logs.filter(l => l.status === filterStatus);
+  logs.sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
+
+  const tbody = document.getElementById('log-tbody');
+  const empty = document.getElementById('log-empty-table');
+  if (!logs.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = logs.map((l,i) => {
+    const cls = l.status === 'HADIR' ? 'hadir' : l.status === 'LIBUR' ? 'libur' : 'absen';
+    const d = new Date(l.tanggal);
+    const tgl = d.toLocaleDateString('id-ID', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    return `<tr>
+      <td style="color:var(--text3)">${i+1}</td>
+      <td><strong>${l.empName}</strong><br><span style="color:var(--text3);font-size:10px">${l.empUnit}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${tgl}</td>
+      <td><span class="badge ${cls}">${l.status}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${l.jamSubmit}</td>
+      <td style="color:var(--text3)">${l.keterangan}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== EMPLOYEE MANAGE =====
+function renderEmployeeManage() {
+  const list = document.getElementById('emp-list-manage');
+  list.innerHTML = '';
+  state.employees.forEach(emp => {
+    list.innerHTML += `
+      <div class="emp-row-manage">
+        <div class="emp-info">
+          <div class="emp-nm">${emp.name}</div>
+          <div class="emp-un">${emp.unit}</div>
+        </div>
+        <button class="btn-del" onclick="removeEmployee(${emp.id})">Hapus</button>
+      </div>`;
+  });
+}
+
+function addEmployee() {
+  const name = document.getElementById('inp-new-name').value.trim();
+  const unit = document.getElementById('inp-new-unit').value.trim();
+  if (!name) { showToast('Nama karyawan wajib diisi', 'error'); return; }
+  state.employees.push({ id: state.nextId++, name, unit: unit||'Umum' });
+  saveState();
+  renderEmployeeManage();
+  populateEmployeeSelect();
+  populateReportFilters();
+  document.getElementById('inp-new-name').value = '';
+  document.getElementById('inp-new-unit').value = '';
+  showToast(`Karyawan ${name} ditambahkan`, 'success');
+}
+
+function removeEmployee(id) {
+  const emp = state.employees.find(e => e.id === id);
+  if (!emp) return;
+  if (!confirm(`Hapus karyawan ${emp.name}? Data absensinya tetap tersimpan.`)) return;
+  state.employees = state.employees.filter(e => e.id !== id);
+  saveState();
+  renderEmployeeManage();
+  populateEmployeeSelect();
+  populateReportFilters();
+  showToast(`Karyawan ${emp.name} dihapus`, 'info');
+}
+
+// ===== GOOGLE DRIVE INTEGRATION =====
+const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
+let gisClient = null;
+let driveAccessToken = null;
+let driveTokenExpiry = null;
+let uploadQueue = [];
+
+// Restore access token from session
+try {
+  const stored = sessionStorage.getItem('jkb_token');
+  if (stored) {
+    const t = JSON.parse(stored);
+    if (t.expiry > Date.now()) { driveAccessToken = t.token; driveTokenExpiry = t.expiry; }
+    else sessionStorage.removeItem('jkb_token');
+  }
+} catch(e) {}
+
+function openDriveModal() {
+  if (state.clientId) document.getElementById('modal-client-id').value = state.clientId;
+  document.getElementById('modal-drive').classList.add('open');
+}
+
+function initGoogleLoginFromModal() {
+  const cid = document.getElementById('modal-client-id').value.trim();
+  if (!cid || !cid.includes('.apps.googleusercontent.com')) {
+    showToast('Masukkan Client ID yang valid dari Google Cloud Console', 'error'); return;
+  }
+  state.clientId = cid; saveState();
+  closeModal('modal-drive');
+  initGoogleLogin();
+}
+
+function initGoogleLogin() {
+  const cid = state.clientId || document.getElementById('inp-client-id')?.value?.trim();
+  if (!cid) { showToast('Masukkan Client ID Google terlebih dahulu', 'error'); return; }
+  state.clientId = cid; saveState();
+
+  const btn = document.getElementById('btn-google-login');
+  if (btn) { btn.disabled = true; btn.textContent = 'Membuka login Google...'; }
+
+  try {
+    gisClient = google.accounts.oauth2.initTokenClient({
+      client_id: cid,
+      scope: DRIVE_SCOPES,
+      callback: (response) => {
+        if (response.error) {
+          showToast('Login Google gagal: ' + response.error, 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Login dengan Google'; }
+          return;
+        }
+        driveAccessToken = response.access_token;
+        driveTokenExpiry = Date.now() + (response.expires_in * 1000);
+        sessionStorage.setItem('jkb_token', JSON.stringify({ token: driveAccessToken, expiry: driveTokenExpiry }));
+        fetchGoogleUserInfo();
+      }
+    });
+    gisClient.requestAccessToken({ prompt: 'consent' });
+  } catch(e) {
+    showToast('Gagal memuat Google SDK. Periksa koneksi internet.', 'error');
+    if (btn) { btn.disabled = false; }
+  }
+}
+
+async function fetchGoogleUserInfo() {
+  try {
+    const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { 'Authorization': 'Bearer ' + driveAccessToken }
+    });
+    const info = await resp.json();
+    state.driveEmail = info.email;
+    state.driveName = info.name;
+    state.drivePhoto = info.picture || null;
+    saveState();
+    updateDriveUI();
+    showToast(`✓ Terhubung sebagai ${info.name}`, 'success');
+    // Flush pending uploads
+    processUploadQueue();
+  } catch(e) {
+    showToast('Gagal mengambil info akun Google', 'error');
+  }
+}
+
+function disconnectDrive() {
+  if (!confirm('Putus koneksi Google Drive?')) return;
+  if (driveAccessToken) {
+    google.accounts.oauth2.revoke(driveAccessToken, () => {});
+  }
+  driveAccessToken = null; driveTokenExpiry = null;
+  sessionStorage.removeItem('jkb_token');
+  state.driveEmail = null; state.driveName = null; state.drivePhoto = null;
+  saveState();
+  updateDriveUI();
+  showToast('Koneksi Google Drive diputus', 'info');
+}
+
+function updateDriveUI() {
+  const connected = !!(driveAccessToken && state.driveEmail);
+
+  // Sidebar dot & text
+  document.getElementById('drive-dot-sidebar').className = 'dot' + (connected ? ' connected' : '');
+  document.getElementById('drive-status-text').textContent = connected ? (state.driveName || state.driveEmail) : 'Belum terhubung';
+  const btnConnect = document.getElementById('btn-sidebar-connect');
+  const btnDisc = document.getElementById('btn-sidebar-disconnect');
+  if (btnConnect) btnConnect.style.display = connected ? 'none' : 'block';
+  if (btnDisc) btnDisc.style.display = connected ? 'block' : 'none';
+
+  // Settings panel
+  const discPanel = document.getElementById('drive-disconnected-panel');
+  const connPanel = document.getElementById('drive-connected-panel');
+  if (discPanel) discPanel.style.display = connected ? 'none' : 'block';
+  if (connPanel) connPanel.style.display = connected ? 'block' : 'none';
+
+  // User card
+  if (connected) {
+    const nameEl = document.getElementById('drive-user-name');
+    const emailEl = document.getElementById('drive-user-email');
+    const avatarEl = document.getElementById('drive-user-avatar');
+    if (nameEl) nameEl.textContent = state.driveName || state.driveEmail;
+    if (emailEl) emailEl.textContent = state.driveEmail;
+    if (avatarEl) {
+      if (state.drivePhoto) avatarEl.innerHTML = `<img src="${state.drivePhoto}" alt="">`;
+      else avatarEl.textContent = (state.driveName || state.driveEmail || 'G')[0].toUpperCase();
+    }
+  }
+
+  // Restore client id input
+  if (state.clientId) {
+    const inp = document.getElementById('inp-client-id');
+    if (inp) inp.value = state.clientId;
+  }
+}
+
+// ===== GOOGLE DRIVE API HELPERS =====
+async function driveRequest(url, method, body, contentType) {
+  if (!driveAccessToken) throw new Error('Tidak ada access token');
+  const opts = { method, headers: { 'Authorization': 'Bearer ' + driveAccessToken } };
+  if (body) { opts.body = body; if (contentType) opts.headers['Content-Type'] = contentType; }
+  const resp = await fetch(url, opts);
+  if (!resp.ok) { const err = await resp.text(); throw new Error(err); }
+  return resp.json();
+}
+
+async function findOrCreateFolder(name, parentId) {
+  // Cari folder
+  let q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  if (parentId) q += ` and '${parentId}' in parents`;
+  const search = await driveRequest(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
+    'GET'
+  );
+  if (search.files && search.files.length > 0) return search.files[0].id;
+  // Buat folder baru
+  const meta = { name, mimeType: 'application/vnd.google-apps.folder' };
+  if (parentId) meta.parents = [parentId];
+  const created = await driveRequest(
+    'https://www.googleapis.com/drive/v3/files?fields=id',
+    'POST', JSON.stringify(meta), 'application/json'
+  );
+  return created.id;
+}
+
+async function uploadFileToDrive(fileName, blob, parentId) {
+  // Multipart upload
+  const boundary = 'jkb_boundary_' + Date.now();
+  const meta = JSON.stringify({ name: fileName, parents: parentId ? [parentId] : [] });
+  const arrayBuf = await blob.arrayBuffer();
+  const uint8 = new Uint8Array(arrayBuf);
+
+  const metaPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`;
+  const dataPart = `--${boundary}\r\nContent-Type: ${blob.type}\r\n\r\n`;
+  const end = `\r\n--${boundary}--`;
+
+  const metaBytes = new TextEncoder().encode(metaPart);
+  const dataHeaderBytes = new TextEncoder().encode(dataPart);
+  const endBytes = new TextEncoder().encode(end);
+  const total = new Uint8Array(metaBytes.length + dataHeaderBytes.length + uint8.length + endBytes.length);
+  let offset = 0;
+  total.set(metaBytes, offset); offset += metaBytes.length;
+  total.set(dataHeaderBytes, offset); offset += dataHeaderBytes.length;
+  total.set(uint8, offset); offset += uint8.length;
+  total.set(endBytes, offset);
+
+  const resp = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + driveAccessToken,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: total
+    }
+  );
+  if (!resp.ok) { const e = await resp.text(); throw new Error(e); }
+  return resp.json();
+}
+
+// ===== UPLOAD FOTO ABSENSI KE DRIVE =====
+async function uploadAbsensiPhoto(empName, tanggal, photoBase64, tipeFoto) {
+  // Struktur: Absensi Karyawan / [Nama Bulan Tahun] / [Nama Karyawan] /
+  const d = new Date(tanggal);
+  const bulanTahun = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  const tglStr = tanggal.replace(/-/g, '');
+  const fileName = `${tglStr}_${tipeFoto}.jpg`;
+
+  try {
+    const rootId = await findOrCreateFolder('Absensi Karyawan', null);
+    const bulanId = await findOrCreateFolder(bulanTahun, rootId);
+    const empFolderId = await findOrCreateFolder(empName, bulanId);
+
+    // Convert base64 ke blob
+    const base64Data = photoBase64.split(',')[1];
+    const byteChars = atob(base64Data);
+    const byteArr = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([byteArr], { type: 'image/jpeg' });
+
+    const result = await uploadFileToDrive(fileName, blob, empFolderId);
+    return { success: true, fileId: result.id, link: result.webViewLink };
+  } catch(e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ===== UPLOAD QUEUE UNTUK FOTO =====
+function addToUploadQueue(logId, empName, tanggal, photoMasukB64, photoPulangB64) {
+  const items = [];
+  if (photoMasukB64) items.push({ logId, empName, tanggal, photo: photoMasukB64, tipe: 'masuk', status: 'waiting' });
+  if (photoPulangB64) items.push({ logId, empName, tanggal, photo: photoPulangB64, tipe: 'pulang', status: 'waiting' });
+  uploadQueue.push(...items);
+  renderUploadQueue();
+  if (driveAccessToken) processUploadQueue();
+}
+
+function renderUploadQueue() {
+  const panel = document.getElementById('upload-queue-panel');
+  const list = document.getElementById('upload-queue-list');
+  if (!panel || !list) return;
+  if (uploadQueue.length === 0) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  list.innerHTML = uploadQueue.slice(-8).reverse().map(item => {
+    const icon = item.tipe === 'masuk' ? '📷' : '🏠';
+    const stMap = { waiting:'⏳ Menunggu', uploading:'⬆ Uploading...', done:'✓ Tersimpan', error:'✗ Gagal' };
+    const stClass = item.status;
+    return `<div class="upload-queue-item">
+      <span style="font-size:14px">${icon}</span>
+      <span class="uq-name">${item.empName} — ${item.tanggal} (${item.tipe})</span>
+      <span class="uq-status ${stClass}">${stMap[item.status]||item.status}</span>
+    </div>`;
+  }).join('');
+}
+
+async function processUploadQueue() {
+  if (!driveAccessToken) return;
+  const pending = uploadQueue.filter(i => i.status === 'waiting');
+  for (const item of pending) {
+    item.status = 'uploading';
+    renderUploadQueue();
+    const result = await uploadAbsensiPhoto(item.empName, item.tanggal, item.photo, item.tipe);
+    item.status = result.success ? 'done' : 'error';
+    if (!result.success) item.errorMsg = result.error;
+    renderUploadQueue();
+    if (result.success) {
+      // Update log dengan link Drive
+      const log = state.logs.find(l => l.id === item.logId);
+      if (log) {
+        if (!log.driveLinks) log.driveLinks = {};
+        log.driveLinks[item.tipe] = result.link;
+        saveState();
+      }
+    }
+  }
+  const doneCount = uploadQueue.filter(i => i.status === 'done').length;
+  const errCount = uploadQueue.filter(i => i.status === 'error').length;
+  if (doneCount > 0 || errCount > 0) {
+    const msg = errCount > 0 ? `${doneCount} foto tersimpan, ${errCount} gagal` : `${doneCount} foto berhasil disimpan ke Drive`;
+    showToast(msg, errCount > 0 ? 'error' : 'success');
+  }
+}
+
+// ===== GENERATE & UPLOAD REKAP XLSX =====
+async function exportToDrive() {
+  if (!driveAccessToken || !state.driveEmail) { showToast('Hubungkan Google Drive terlebih dahulu', 'error'); return; }
+
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  const bulanTahun = `${MONTHS[month]} ${year}`;
+  const daysInMonth = getDaysInMonth(month, year);
+
+  showToast(`Membuat rekap ${bulanTahun}...`, 'info');
+
+  try {
+    // Build workbook sesuai format REKAP_ABSEN.xlsx
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    // Header
+    wsData.push(['REKAP ABSENSI BULANAN']);
+    wsData.push([new Date(year, month, 1).toLocaleDateString('id-ID', { month:'long', year:'numeric' })]);
+    wsData.push([]);
+    wsData.push(['NAMA KARYAWAN', 'KETERANGAN', '', '', '']);
+    wsData.push(['', 'HADIR', 'ABSEN', 'LIBUR', 'PERSENTASE KEHADIRAN']);
+
+    const logsThisMonth = state.logs.filter(l => {
+      const d = new Date(l.tanggal);
+      return d.getMonth() === month && d.getFullYear() === year;
+    });
+
+    // Data per karyawan
+    state.employees.forEach(emp => {
+      const logs = logsThisMonth.filter(l => l.empId === emp.id);
+      const hadir = logs.filter(l => l.status === 'HADIR').length;
+      const absen = logs.filter(l => l.status === 'ABSEN').length;
+      const libur = logs.filter(l => l.status === 'LIBUR').length;
+      const denom = daysInMonth - libur;
+      const pct = denom > 0 ? Math.round((hadir / denom) * 100) : 0;
+      wsData.push([`${emp.name.toUpperCase()} (${emp.unit.toUpperCase()})`, hadir, absen, libur, `${pct}%`]);
+    });
+
+    wsData.push([]);
+    wsData.push(['', 'Tanggal', ...state.employees.map(e => e.name)]);
+
+    // Detail per tanggal
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dd = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dayName = new Date(dd).toLocaleDateString('id-ID', { weekday:'short' });
+      const row = [d, `${dayName}, ${d}`];
+      state.employees.forEach(emp => {
+        const log = logsThisMonth.find(l => l.empId === emp.id && l.tanggal === dd);
+        row.push(log ? log.status : '-');
+      });
+      wsData.push(row);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'PRESENSI');
+
+    // Convert ke blob
+    const xlsxBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([xlsxBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    // Upload ke Drive: Absensi Karyawan / [Nama Bulan Tahun] — Rekap /
+    const rootId = await findOrCreateFolder('Absensi Karyawan', null);
+    const rekapFolderId = await findOrCreateFolder(`${bulanTahun} — Rekap`, rootId);
+    const fileName = `REKAP_ABSENSI_${bulanTahun.toUpperCase().replace(/ /g,'_')}.xlsx`;
+    const result = await uploadFileToDrive(fileName, blob, rekapFolderId);
+
+    showToast(`✓ ${fileName} tersimpan ke Google Drive`, 'success');
+  } catch(e) {
+    showToast('Gagal upload rekap: ' + e.message, 'error');
+  }
+}
+
+// ===== MODAL & TOAST =====
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>
